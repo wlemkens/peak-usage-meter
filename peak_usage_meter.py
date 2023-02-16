@@ -62,7 +62,6 @@ class PeakPowerMeter():
         else:
             self.first_time = now
             self.first_consumption = float(message.payload)
-        self.first_time = now
 
 def main(argv):
     meter = PeakPowerMeter()
