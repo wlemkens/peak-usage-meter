@@ -28,6 +28,7 @@ class PeakPowerMeter():
                 logging.info(f'{datetime.now().strftime("%H:%M:%S")} Connecting to MQTT')
                 self.client.connect(self.mqtt_host, self.mqtt_port, 60)
                 self.client.subscribe(self.mqtt_read_topic, 1)
+                self.client.subscribe("energy/peak_usage", 0)
                 logging.info(f'{datetime.now().strftime("%H:%M:%S")} Connected to MQTT')
                 self.client.loop_forever()
             except:
@@ -35,33 +36,55 @@ class PeakPowerMeter():
                 time.sleep(10)
 
     def on_message(self, client, userdata, message):
-        logging.debug(f'{datetime.now().strftime("%H:%M:%S")} Received message payload = {float(message.payload)}, timestamp = {message.timestamp}')
-        now = datetime.now()
-        if self.first_time != None:
-            dt = (now - self.first_time).seconds
-            current_consumption = float(message.payload)
-            # usage kWh 1kWh /3600s -> 1kW
-            du = current_consumption - self.first_consumption
-            usage = du * 1000 / dt * 3600
-            self.client.publish("energy/current_peak_usage", usage, 2, False)
-            logging.debug(
-                f'{datetime.now().strftime("%H:%M:%S")} Peak usage {usage}W')
-            if now.minute % 15 < self.first_time.minute % 15:
-                # New time block
+        logging.debug(
+            f'{datetime.now().strftime("%H:%M:%S")} Received message payload = {float(message.payload)}, timestamp = {message.timestamp}')
+        if message.topic == "energy/peak_usage":
+            self.highest_usage = float(message.payload)
+            logging.info(
+                f'{datetime.now().strftime("%H:%M:%S")} Setting peak usage from earlier to {self.highest_usage}W.')
+        elif message.topic == "homeassistant/sensor/grid/usage":
+            now = datetime.now()
+            if self.first_time != None:
+                dt = (now - self.first_time).seconds
+                current_consumption = float(message.payload)
+                # usage kWh 1kWh /3600s -> 1kW
+                du = current_consumption - self.first_consumption
+                usage = du * 1000 / dt * 3600
+                self.client.publish("energy/current_peak_usage", usage, 2, False)
+                logging.debug(
+                    f'{datetime.now().strftime("%H:%M:%S")} Peak usage {usage}W')
+                logging.debug(
+                    f'{datetime.now().strftime("%H:%M:%S")} {now.minute} -> {now.minute % 15} <? {self.first_time.minute} -> {self.first_time.minute % 15}')
+                if (usage > self.highest_usage) and usage > 2500:
+                    self.client.publish("energy/peak_usage_warning", True, 2, False)
+                    logging.debug(
+                        f'{datetime.now().strftime("%H:%M:%S")} Peak usage warning.')
+                else:
+                    logging.debug(
+                        f'{datetime.now().strftime("%H:%M:%S")} Peak usage no warning.')
+                    self.client.publish("energy/peak_usage_warning", False, 2, False)
+                if (now.minute % 15 < self.first_time.minute % 15) or dt >= 15*60:
+                    logging.debug(
+                        f'{datetime.now().strftime("%H:%M:%S")} 15 minutes have passed.')
+                    # New time block
+                    self.first_time = now
+                    self.first_consumption = current_consumption
+                    logging.debug(
+                        f'{datetime.now().strftime("%H:%M:%S")} Highest = {self.highest_usage} <? usage = {usage}')
+                    if self.highest_usage < usage:
+                        logging.info(
+                            f'{datetime.now().strftime("%H:%M:%S")} Peak usage increased from = {self.highest_usage}W to {usage}W.')
+                        self.highest_usage = usage
+                    self.client.publish("energy/peak_usage", self.highest_usage, 2, True)
+                    logging.debug(
+                        f'{datetime.now().strftime("%H:%M:%S")} Published peak usage.')
+                    if now.day == 1:
+                        logging.info(
+                            f'{datetime.now().strftime("%H:%M:%S")} Peak usage reset because of new month.')
+                        self.highest_usage = 0
+            else:
                 self.first_time = now
-                self.first_consumption = current_consumption
-                if self.highest_usage < usage:
-                    logging.info(
-                        f'{datetime.now().strftime("%H:%M:%S")} Peak usage increased from = {self.highest_usage}W to {usage}W.')
-                    self.highest_usage = usage
-                self.client.publish("energy/peak_usage", self.highest_usage, 2, True)
-                if now.day == 1:
-                    logging.info(
-                        f'{datetime.now().strftime("%H:%M:%S")} Peak usage reset because of new month.')
-                    self.highest_usage = 0
-        else:
-            self.first_time = now
-            self.first_consumption = float(message.payload)
+                self.first_consumption = float(message.payload)
 
 def main(argv):
     meter = PeakPowerMeter()
