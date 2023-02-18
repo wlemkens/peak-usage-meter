@@ -53,8 +53,6 @@ class PeakPowerMeter():
                 self.client.publish("energy/current_peak_usage", usage, 2, False)
                 logging.debug(
                     f'{datetime.now().strftime("%H:%M:%S")} Peak usage {usage}W')
-                logging.debug(
-                    f'{datetime.now().strftime("%H:%M:%S")} {now.minute} -> {now.minute % 15} <? {self.first_time.minute} -> {self.first_time.minute % 15}')
                 if (usage > self.highest_usage) and usage > 2500:
                     self.client.publish("energy/peak_usage_warning", True, 2, False)
                     logging.debug(
@@ -69,8 +67,6 @@ class PeakPowerMeter():
                     # New time block
                     self.first_time = now
                     self.first_consumption = current_consumption
-                    logging.debug(
-                        f'{datetime.now().strftime("%H:%M:%S")} Highest = {self.highest_usage} <? usage = {usage}')
                     if self.highest_usage < usage:
                         logging.info(
                             f'{datetime.now().strftime("%H:%M:%S")} Peak usage increased from = {self.highest_usage}W to {usage}W.')
