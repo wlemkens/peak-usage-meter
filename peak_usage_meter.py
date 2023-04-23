@@ -30,11 +30,11 @@ class PeakPowerMeter():
         connecting = True
         while(connecting):
             try:
-                logging.info(f'{datetime.now().strftime("%H:%M:%S")} Connecting to MQTT')
+                logging.info(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Connecting to MQTT')
                 self.client.connect(self.mqtt_host, self.mqtt_port, 60)
                 self.client.subscribe(self.mqtt_read_topic, 1)
                 self.client.subscribe("energy/peak_usage", 0)
-                logging.info(f'{datetime.now().strftime("%H:%M:%S")} Connected to MQTT')
+                logging.info(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Connected to MQTT')
                 self.client.loop_start()
                 self.last_update = datetime.now()
                 while True:
@@ -42,7 +42,7 @@ class PeakPowerMeter():
                     if self.needs_update():
                         self.update_usage()
             except NameError:
-                logging.warning(f'{datetime.now().strftime("%H:%M:%S")} Failed to connect to MQTT')
+                logging.warning(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Failed to connect to MQTT')
                 time.sleep(10)
 
     def needs_update(self):
@@ -56,38 +56,38 @@ class PeakPowerMeter():
         else:
             self.interval = 5 * 60
         logging.debug(
-                f'{datetime.now().strftime("%H:%M:%S")} Set update interval to {self.interval:.1f}s')
+                f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Set update interval to {self.interval:.1f}s')
 
     def publish_current_peak(self, usage):
         self.client.publish("energy/current_peak_usage", usage, 2, False)
         logging.debug(
-            f'{datetime.now().strftime("%H:%M:%S")} Peak usage {usage:.0f}W')
+            f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Peak usage {usage:.0f}W')
         if (usage > self.highest_usage) and usage > 2500:
             self.client.publish("energy/peak_usage_warning", True, 2, False)
             logging.debug(
-                f'{datetime.now().strftime("%H:%M:%S")} Peak usage warning.')
+                f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Peak usage warning.')
         else:
             logging.debug(
-                f'{datetime.now().strftime("%H:%M:%S")} Peak usage no warning.')
+                f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Peak usage no warning.')
             self.client.publish("energy/peak_usage_warning", False, 2, False)
 
     def publish_rollover_if_needed(self, now, dt, usage):
         if (now.minute % 15 < self.first_time.minute % 15) or (now - self.first_time).total_seconds() >= 15 * 60:
             logging.debug(
-                f'{datetime.now().strftime("%H:%M:%S")} 15 minutes have passed. Publishing peak.')
+                f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} 15 minutes have passed. Publishing peak.')
             # New time block
             if self.highest_usage < usage:
                 logging.info(
-                    f'{datetime.now().strftime("%H:%M:%S")} Peak usage increased from = {self.highest_usage:.0f}W to {usage:.0f}W.')
+                    f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Peak usage increased from = {self.highest_usage:.0f}W to {usage:.0f}W.')
                 self.highest_usage = usage
             self.client.publish("energy/peak_usage", self.highest_usage, 2, True)
             logging.debug(
-                f'{datetime.now().strftime("%H:%M:%S")} Published peak usage.')
+                f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Published peak usage.')
             self.first_time = now
             self.first_consumption = self.latest_consumption
             if now.day == 1:
                 logging.info(
-                    f'{datetime.now().strftime("%H:%M:%S")} Peak usage reset because of new month.')
+                    f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Peak usage reset because of new month.')
                 self.highest_usage = 0
 
     def update_usage(self):
@@ -96,6 +96,8 @@ class PeakPowerMeter():
         if self.first_time != None:
             dt = (now - self.first_time).total_seconds()
             if self.previous_update < self.first_time:
+                logging.debug(
+                    f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Last update was too long ago. Using full period for calculation.')
                 dt = (now - self.previous_update).total_seconds()
             du = self.latest_consumption - self.first_consumption
             usage = du * 1000 / dt * 3600
@@ -114,11 +116,11 @@ class PeakPowerMeter():
 
     def on_message(self, client, userdata, message):
         logging.debug(
-            f'{datetime.now().strftime("%H:%M:%S")} Received message payload = {float(message.payload)}, timestamp = {message.timestamp} on topic {message.topic}')
+            f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Received message payload = {float(message.payload)}, timestamp = {message.timestamp} on topic {message.topic}')
         if message.topic == "energy/peak_usage":
             self.highest_usage = float(message.payload)
             logging.info(
-                f'{datetime.now().strftime("%H:%M:%S")} Setting peak usage from earlier to {self.highest_usage:.0f}W.')
+                f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Setting peak usage from earlier to {self.highest_usage:.0f}W.')
         elif message.topic == "homeassistant/sensor/grid/usage":
             now = datetime.now()
             self.register_consumption(float(message.payload), now)
@@ -126,7 +128,7 @@ class PeakPowerMeter():
                 dt = (now - self.first_time).total_seconds()
                 current_consumption = float(message.payload)
                 logging.debug(
-                    f'{datetime.now().strftime("%H:%M:%S")} Consumption {current_consumption}kWh, dt = {dt}s')
+                    f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} Consumption {current_consumption}kWh, dt = {dt}s')
                 # usage kWh 1kWh /3600s -> 1kW
                 du = current_consumption - self.first_consumption
                 usage = du * 1000 / dt * 3600
