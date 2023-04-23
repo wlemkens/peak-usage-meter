@@ -13,11 +13,12 @@ class PeakPowerMeter():
         self.reset_time = None
         self.first_time = None
         self.latest_update = None
+        self.previous_update = None
         self.latest_consumption = None
         self.last_update = None
         self.first_consumption = None
         self.last_consumption = None
-        self.interval = 10
+        self.interval = 15
         self.highest_usage = 0
         self.mqtt_host = "192.168.0.183"
         self.mqtt_port = 1883
@@ -37,7 +38,7 @@ class PeakPowerMeter():
                 self.client.loop_start()
                 self.last_update = datetime.now()
                 while True:
-                    time.sleep(10)
+                    time.sleep(15)
                     if self.needs_update():
                         self.update_usage()
             except NameError:
@@ -94,6 +95,8 @@ class PeakPowerMeter():
         self.last_update = now
         if self.first_time != None:
             dt = (now - self.first_time).total_seconds()
+            if self.previous_update < self.first_time:
+                dt = (now - self.previous_update).total_seconds()
             du = self.latest_consumption - self.first_consumption
             usage = du * 1000 / dt * 3600
             self.update_interval(usage)
@@ -106,6 +109,7 @@ class PeakPowerMeter():
 
     def register_consumption(self, consumption: float, now):
         self.latest_consumption = consumption
+        self.previous_update = self.latest_update
         self.latest_update = now
 
     def on_message(self, client, userdata, message):
